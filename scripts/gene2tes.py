@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Get intervals around unique TES (Transcription End Site)
+Get intervals around TES (Transcription End Site)
 """
 
 import os
@@ -26,6 +26,9 @@ def process_command_line(argv):
     parser.add_option("--len_dn", dest="len_dn", default=0,
         help="length downstream of TES[default 0]", type="int")
 
+    parser.add_option("-g", "--genome", dest="genome",
+        help="file of chrom sizes", type="str")
+
     parser.add_option("-o", "--outfile", dest="outfile",
         help="out file name", type="str")
 
@@ -47,7 +50,14 @@ def main(argv=None):
         outfile = options.outfile
         outhandle = open(outfile, "w")
 
+    cinfo = {}
+    if options.genome:
+        for line in open(options.genome):
+            chrom, size = line.strip().split("\t")[:2]
+            cinfo[chrom] = int(size)
+
     for gr in reader_gene(open(f_gene), 'bed'):
+        chrom = gr.get_chrom()
         if gr.get_strand() == "+":
             tes = gr.get_txEnd()
             s = tes - options.len_up
@@ -57,8 +67,15 @@ def main(argv=None):
             s = tes - options.len_dn
             e = tes + options.len_up
 
+        if chrom in cinfo:
+            e = min(e, cinfo[chrom])
+            s = max(s, 0)
+
+        if s >= e:
+            continue
+
         outhandle.write("\t".join(map(str, [
-            gr.get_chrom(), s, e, gr.get_score(), tes, gr.get_strand()]))+"\n")
+            chrom, s, e, gr.get_score(), tes, gr.get_strand()]))+"\n")
 
     if options.outfile:
         outhandle.close()
